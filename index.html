@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico">
+  <title>Data Network Visualizer</title>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>Data Network Visualizer</h1>
+      <div class="header-controls">
+        <button id="btn-layout-hierarchical" title="Hierarchical Layout">
+          <i class="fas fa-sitemap"></i>
+        </button>
+        <button id="btn-layout-organic" title="Organic Layout">
+          <i class="fas fa-project-diagram"></i>
+        </button>
+        <button id="btn-layout-radial" title="Radial Layout">
+          <i class="fas fa-circle-notch"></i>
+        </button>
+        <span class="separator"></span>
+        <button id="btn-export-svg" title="Export as SVG">SVG</button>
+        <button id="btn-export-png" title="Export as PNG">PNG</button>
+        <button id="btn-reset" title="Reset View" class="btn-danger">
+          <i class="fas fa-redo-alt"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <!-- Left sidebar for file upload and configuration -->
+      <aside class="sidebar left-sidebar">
+        <div id="file-upload-container"></div>
+        <div id="config-panel-container"></div>
+      </aside>
+
+      <!-- Main graph visualization area -->
+      <section class="graph-area">
+        <div id="graph-component-container"></div>
+      </section>
+
+      <!-- Right sidebar for analysis tools -->
+      <aside class="sidebar right-sidebar">
+        <div id="analysis-tools-container"></div>
+      </aside>
+    </main>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
