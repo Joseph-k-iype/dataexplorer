@@ -13,6 +13,11 @@
     <header class="app-header">
       <h1>Data Network Visualizer</h1>
       <div class="header-controls">
+        <div class="mode-toggle">
+          <button id="btn-standard-mode" class="mode-button active" title="Standard Mode">Standard</button>
+          <button id="btn-advanced-mode" class="mode-button" title="Advanced Mode">Advanced</button>
+        </div>
+        <span class="separator"></span>
         <button id="btn-layout-hierarchical" title="Hierarchical Layout">
           <i class="fas fa-sitemap"></i>
         </button>
@@ -45,9 +50,15 @@
 
       <!-- Right sidebar for analysis tools -->
       <aside class="sidebar right-sidebar">
+        <div id="settings-panel-container"></div>
         <div id="analysis-tools-container"></div>
       </aside>
     </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="license-info">yFiles HTML Evaluation License</div>
+    </footer>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

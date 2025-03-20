@@ -1,0 +1,19 @@
+id,label,type,description,status
+db1,Users Database,database,Primary user information storage,active
+db2,Products Database,database,Product catalog and inventory,active
+db3,Orders Database,database,Transaction records and order history,active
+db4,Analytics Database,database,Reporting and analytics data warehouse,active
+api1,Authentication API,service,Handles user login and session management,active
+api2,Product API,service,Product catalog and search functionality,active
+api3,Order API,service,Processes orders and payments,active
+api4,User Profile API,service,Manages user profiles and preferences,active
+api5,Analytics API,service,Provides reporting and dashboard data,maintenance
+api6,Notification Service,service,Handles email and push notifications,active
+gw1,API Gateway,gateway,Main entry point for client requests,active
+fe1,Web Frontend,client,Customer-facing web application,active
+fe2,Mobile App,client,iOS and Android mobile application,active
+fe3,Admin Dashboard,client,Internal administration interface,active
+srv1,Application Server 1,server,Primary application server,active
+srv2,Application Server 2,server,Secondary application server,active
+srv3,Database Server,server,Hosts all database instances,active
+srv4,Cache Server,server,Redis caching layer,active

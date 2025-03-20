@@ -18,7 +18,10 @@ import { FileUploadComponent } from './components/file-upload/FileUploadComponen
 import { ConfigurationPanel } from './components/config-panel/ConfigurationPanel';
 import { GraphViewer } from './components/graph-viewer/GraphViewer';
 import { AnalysisToolsComponent } from './components/analysis-tools/AnalysisToolsComponent';
+import { AdvancedImportComponent } from './components/advanced-import/AdvancedImportComponent';
+import { GraphSettingsPanel, GraphSettings } from './components/graph-settings/GraphSettingsPanel';
 import { GraphBuilderService } from './services/graph-builder/GraphBuilderService';
+import { GraphFilterService } from './services/graph-filter/GraphFilterService';
 import { RawData, Dataset, MappingConfiguration, ImpactAnalysisResult, PathAnalysisResult } from './models/data-types';
 
 // Application state
@@ -26,9 +29,12 @@ let currentRawData: RawData | null = null;
 let currentMapping: MappingConfiguration | null = null;
 let currentDataset: Dataset | null = null;
 let selectedNodes: string[] = [];
+let isAdvancedMode: boolean = false;
+let filteredDataset: Dataset | null = null;
 
 // Initialize services
 const graphBuilder = new GraphBuilderService();
+const graphFilter = new GraphFilterService();
 
 // Initialize components
 const fileUploadComponent = new FileUploadComponent(
@@ -39,6 +45,10 @@ const configPanel = new ConfigurationPanel(
   document.getElementById('config-panel-container') as HTMLElement
 );
 
+const advancedImport = new AdvancedImportComponent(
+  document.getElementById('file-upload-container') as HTMLElement
+);
+
 const graphViewer = new GraphViewer(
   document.getElementById('graph-component-container') as HTMLElement
 );
@@ -46,6 +56,61 @@ const graphViewer = new GraphViewer(
 const analysisTools = new AnalysisToolsComponent(
   document.getElementById('analysis-tools-container') as HTMLElement
 );
+
+const graphSettingsPanel = new GraphSettingsPanel(
+  document.getElementById('settings-panel-container') as HTMLElement
+);
+
+// Initially hide advanced import
+advancedImport.onDatasetLoaded((dataset: Dataset) => {
+  currentDataset = dataset;
+  filteredDataset = dataset;
+  
+  // Update settings panel with new dataset
+  graphSettingsPanel.setDataset(dataset);
+  
+  // Load dataset into graph viewer
+  graphViewer.loadDataset(dataset).then(() => {
+    // Make sure graph is fitted to view after loading
+    setTimeout(() => {
+      graphViewer.fitGraph();
+    }, 100);
+  });
+  
+  // Update analysis tools with new dataset
+  analysisTools.setDataset(dataset);
+  
+  // Reset selection
+  selectedNodes = [];
+  analysisTools.setSelectedNodes([]);
+});
+
+// Handle filter changes in advanced mode
+advancedImport.onFilterChange((sourceIds: string[], targetIds: string[]) => {
+  if (!currentDataset) return;
+  
+  if (sourceIds.length === 0) {
+    // If no source nodes selected, show the full dataset
+    filteredDataset = currentDataset;
+  } else {
+    // Apply filters
+    filteredDataset = graphFilter.filterDataset(currentDataset, sourceIds, targetIds, 10);
+  }
+  
+  // Update settings panel with filtered dataset
+  graphSettingsPanel.setDataset(filteredDataset);
+  
+  // Load filtered dataset into graph viewer
+  graphViewer.loadDataset(filteredDataset).then(() => {
+    // Make sure graph is fitted to view after loading
+    setTimeout(() => {
+      graphViewer.fitGraph();
+    }, 100);
+  });
+  
+  // Update analysis tools with filtered dataset
+  analysisTools.setDataset(filteredDataset);
+});
 
 // Register event handlers
 
@@ -69,6 +134,9 @@ configPanel.onConfigChange((config: MappingConfiguration) => {
     // Build dataset from raw data and mapping
     currentDataset = graphBuilder.buildDataset(currentRawData, currentMapping);
     
+    // Update settings panel with new dataset
+    graphSettingsPanel.setDataset(currentDataset);
+    
     // Load dataset into graph viewer
     graphViewer.loadDataset(currentDataset).then(() => {
       // Make sure graph is fitted to view after loading
@@ -90,6 +158,17 @@ configPanel.onConfigChange((config: MappingConfiguration) => {
 graphViewer.onNodeSelection((nodeIds: string[]) => {
   selectedNodes = nodeIds;
   analysisTools.setSelectedNodes(nodeIds);
+});
+
+// Graph settings events
+graphSettingsPanel.onSettingsChange((settings: GraphSettings) => {
+  if (currentDataset) {
+    // Update dataset in settings panel in case it was reset
+    graphSettingsPanel.setDataset(currentDataset);
+    
+    // Apply settings to graph viewer
+    graphViewer.updateSettings(settings);
+  }
 });
 
 // Analysis tools events
@@ -133,33 +212,33 @@ document.getElementById('btn-layout-radial')?.addEventListener('click', () => {
 });
 
 // Export button handlers
-document.getElementById('btn-export-svg')?.addEventListener('click', async () => {
-  try {
-    const svgContent = await graphViewer.exportAsSVG();
+// document.getElementById('btn-export-svg')?.addEventListener('click', async () => {
+//   try {
+//     const svgContent = await graphViewer.exportAsSVG();
     
-    // Create a Blob from the SVG content
-    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+//     // Create a Blob from the SVG content
+//     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
     
-    // Create a download link
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'graph-export.svg';
+//     // Create a download link
+//     const url = URL.createObjectURL(blob);
+//     const a = document.createElement('a');
+//     a.href = url;
+//     a.download = 'graph-export.svg';
     
-    // Trigger download
-    document.body.appendChild(a);
-    a.click();
+//     // Trigger download
+//     document.body.appendChild(a);
+//     a.click();
     
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-  } catch (error) {
-    console.error('Error exporting SVG:', error);
-    alert('Failed to export as SVG');
-  }
-});
+//     // Clean up
+//     setTimeout(() => {
+//       document.body.removeChild(a);
+//       URL.revokeObjectURL(url);
+//     }, 100);
+//   } catch (error) {
+//     console.error('Error exporting SVG:', error);
+//     alert('Failed to export as SVG');
+//   }
+// });
 
 document.getElementById('btn-export-png')?.addEventListener('click', () => {
   // Export PNG functionality - This is a placeholder
@@ -173,11 +252,13 @@ document.getElementById('btn-reset')?.addEventListener('click', () => {
     currentRawData = null;
     currentMapping = null;
     currentDataset = null;
+    filteredDataset = null;
     selectedNodes = [];
     
     // Reset UI components
     graphViewer.clear();
     configPanel.setData({ columns: [], rows: [] });
+    graphSettingsPanel.setDataset({ entities: [], relationships: [] });
     analysisTools.setDataset({ entities: [], relationships: [] });
     analysisTools.setSelectedNodes([]);
     
@@ -185,6 +266,75 @@ document.getElementById('btn-reset')?.addEventListener('click', () => {
     location.reload();
   }
 });
+
+// Mode toggle handlers
+document.getElementById('btn-standard-mode')?.addEventListener('click', () => {
+  if (isAdvancedMode) {
+    isAdvancedMode = false;
+    toggleModeUI(false);
+  }
+});
+
+document.getElementById('btn-advanced-mode')?.addEventListener('click', () => {
+  if (!isAdvancedMode) {
+    isAdvancedMode = true;
+    toggleModeUI(true);
+  }
+});
+
+/**
+ * Toggle between standard and advanced modes
+ */
+function toggleModeUI(advanced: boolean): void {
+  // Update mode button states
+  const standardBtn = document.getElementById('btn-standard-mode');
+  const advancedBtn = document.getElementById('btn-advanced-mode');
+  
+  if (standardBtn && advancedBtn) {
+    if (advanced) {
+      standardBtn.classList.remove('active');
+      advancedBtn.classList.add('active');
+    } else {
+      standardBtn.classList.add('active');
+      advancedBtn.classList.remove('active');
+    }
+  }
+  
+  // Reset graph
+  graphViewer.clear();
+  
+  // Toggle visibility of components
+  const fileUploadContainer = document.getElementById('file-upload-container');
+  const configPanelContainer = document.getElementById('config-panel-container');
+  
+  if (fileUploadContainer && configPanelContainer) {
+    if (advanced) {
+      // Hide standard components
+      fileUploadContainer.innerHTML = '';
+      fileUploadContainer.appendChild(advancedImport.getElement());
+      configPanelContainer.style.display = 'none';
+    } else {
+      // Show standard components
+      fileUploadContainer.innerHTML = '';
+      fileUploadContainer.appendChild(fileUploadComponent.getElement());
+      configPanelContainer.style.display = 'block';
+    }
+  }
+  
+  // Reset data
+  currentRawData = null;
+  currentMapping = null;
+  currentDataset = null;
+  filteredDataset = null;
+  selectedNodes = [];
+  
+  // Reset settings panel
+  graphSettingsPanel.setDataset({ entities: [], relationships: [] });
+  
+  // Reset analysis tools
+  analysisTools.setDataset({ entities: [], relationships: [] });
+  analysisTools.setSelectedNodes([]);
+}
 
 // Handle window resize to ensure graph component sizes correctly
 window.addEventListener('resize', () => {

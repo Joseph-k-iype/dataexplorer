@@ -33,10 +33,14 @@ import {
   Size,
   ItemEventArgs,
   IModelItem,
-  // Add these imports for label placement
+  LabelStyle,
   ExteriorNodeLabelModel,
   ExteriorNodeLabelModelPosition,
-  EdgeLabelPreferredPlacement
+  EdgeLabelPreferredPlacement,
+  SvgExport,
+  CssFill,
+  IFoldingView,
+  ILabel
 } from '@yfiles/yfiles';
 
 import { 
@@ -48,6 +52,8 @@ import {
   LayoutType 
 } from '../../models/data-types';
 
+import { GraphSettings } from '../../components/graph-settings/GraphSettingsPanel';
+
 export class GraphViewer {
   private graphComponent: GraphComponent;
   private graph: IGraph;
@@ -55,8 +61,14 @@ export class GraphViewer {
   private edgeMap: Map<string, IEdge> = new Map();
   private dataset: Dataset | null = null;
   private foldingManager: FoldingManager | null = null;
-  private foldingView: IGraph | null = null;
+  private foldingView: IFoldingView | null = null;
   private nodeSelectionCallback: ((nodeIds: string[]) => void) | null = null;
+  private settings: GraphSettings = {
+    nodeColors: {},
+    showGroups: true,
+    showEdgeLabels: true,
+    highlightEdgeLabels: true
+  };
   
   constructor(container: HTMLElement) {
     // Initialize GraphComponent
@@ -75,7 +87,7 @@ export class GraphViewer {
     inputMode.navigationInputMode.allowCollapseGroup = true;
     inputMode.navigationInputMode.allowExpandGroup = true;
     
-    // Use the collection events to listen for selection changes - note the kebab-case event names
+    // Use the collection events to listen for selection changes
     this.graphComponent.selection.addEventListener('item-added', 
       (evt: ItemEventArgs<IModelItem>) => {
         this.onSelectionChanged();
@@ -99,7 +111,7 @@ export class GraphViewer {
       // Convert the view coordinates to world coordinates
       const worldLocation = this.graphComponent.viewToWorldCoordinates(viewPoint);
       
-      // Use GraphItemTypes.NODE as an array element for yFiles 3.0
+      // Use GraphItemTypes.NODE for yFiles 3.0
       const hitItems = inputMode.findItems(worldLocation, [GraphItemTypes.NODE]);
       
       if (hitItems.size > 0) {
@@ -127,6 +139,93 @@ export class GraphViewer {
     this.dataset = null;
     this.graphComponent.fitGraphBounds();
   }
+
+  /**
+   * Update graph settings
+   */
+  updateSettings(settings: GraphSettings): void {
+    this.settings = { ...settings };
+    this.applySettings();
+  }
+
+  /**
+   * Apply current settings to the graph
+   */
+  private applySettings(): void {
+    if (!this.graph) return;
+    
+    // Apply node colors based on type
+    this.nodeMap.forEach((node, id) => {
+      const entity = node.tag as DataEntity;
+      if (entity && entity.type) {
+        // Get color from settings or use default
+        const color = this.settings.nodeColors[entity.type] || this.getDefaultColorForType(entity.type);
+        
+        // Get current style
+        const currentStyle = node.style;
+        
+        if (currentStyle instanceof ShapeNodeStyle) {
+          // Create new style with updated color
+          const newStyle = new ShapeNodeStyle({
+            shape: ShapeNodeShape.ELLIPSE, // Always use circle shape
+            fill: new CssFill(color),
+            stroke: '2px #667788'
+          });
+          
+          // Apply the new style
+          this.graph.setStyle(node, newStyle);
+        }
+      }
+    });
+    
+    // Toggle group node visibility
+    if (this.foldingManager && this.foldingView) {
+      if (this.settings.showGroups) {
+        // Expand all groups
+        this.graph.nodes.forEach(node => {
+          if (this.graph.isGroupNode(node)) {
+            this.foldingView?.expand(node);
+          }
+        });
+      } else {
+        // Collapse all groups
+        this.graph.nodes.forEach(node => {
+          if (this.graph.isGroupNode(node)) {
+            this.foldingView?.collapse(node);
+          }
+        });
+      }
+    }
+    
+    // Toggle edge label visibility
+    // this.edgeMap.forEach((edge) => {
+    //   // Get all labels for this edge
+    //   for (let i = 0; i < edge.labels.size; i++) {
+    //     const label = edge.labels.get(i);
+    //     if (label) {
+    //       // Set label visibility
+    //       this.graph.set(label, this.settings.showEdgeLabels);
+          
+    //       // Apply highlight if needed
+    //       if (this.settings.showEdgeLabels && this.settings.highlightEdgeLabels) {
+    //         // Use a custom style for labels with background
+    //         const style = new LabelStyle({
+    //           backgroundFill: 'rgba(255, 255, 255, 0.8)',
+    //           backgroundStroke: 'rgba(0, 0, 0, 0.1)'
+    //         });
+    //         this.graph.setStyle(label, style);
+    //       } else if (this.settings.showEdgeLabels) {
+    //         // Use default style without background
+    //         const style = new LabelStyle();
+    //         this.graph.setStyle(label, style);
+    //       }
+    //     }
+    //   }
+    // });
+    
+    // Refresh the view
+    this.graphComponent.invalidate();
+  }
   
   /**
    * Load dataset into the graph
@@ -144,6 +243,9 @@ export class GraphViewer {
     // Second pass: Create edges
     this.createEdges(dataset.relationships);
     
+    // Apply settings
+    this.applySettings();
+    
     // Apply initial layout
     await this.applyLayout('hierarchical');
   }
@@ -158,9 +260,9 @@ export class GraphViewer {
     switch (layoutType) {
       case 'hierarchical':
         layout = new HierarchicalLayout({
-          nodeDistance: 100,       // Increased from 50 to prevent overlap
-          edgeDistance: 30,        // Increased from 20
-          minimumLayerDistance: 80, // Add minimum layer distance to prevent vertical overlap
+          nodeDistance: 100,       
+          edgeDistance: 30,        
+          minimumLayerDistance: 80, 
           nodeLabelPlacement: NodeLabelPlacement.CONSIDER,
           edgeLabelPlacement: EdgeLabelPlacement.INTEGRATED,
         });
@@ -168,7 +270,7 @@ export class GraphViewer {
         
       case 'organic':
         layout = new OrganicLayout({
-          defaultMinimumNodeDistance: 80,   // Increased from 30 to prevent overlap
+          defaultMinimumNodeDistance: 80,   
           qualityTimeRatio: 0.7,
           nodeLabelPlacement: NodeLabelPlacement.CONSIDER,
           edgeLabelPlacement: EdgeLabelPlacement.INTEGRATED
@@ -177,7 +279,7 @@ export class GraphViewer {
         
       case 'radial':
         layout = new RadialLayout({
-          minimumNodeDistance: 80,  // Increased from 30 to prevent overlap
+          minimumNodeDistance: 80,  
         });
         break;
     }
@@ -261,12 +363,11 @@ export class GraphViewer {
     this.foldingManager = new FoldingManager(this.graph);
     
     // Create folding view 
-    const folderView = this.foldingManager.createFoldingView();
-    this.foldingView = folderView.graph;
+    this.foldingView = this.foldingManager.createFoldingView();
     
     // Use the folding view instead of the original graph
     if (this.foldingView) {
-      this.graph = this.foldingView;
+      this.graph = this.foldingView.graph;
       this.graphComponent.graph = this.graph;
     }
   }
@@ -314,15 +415,15 @@ export class GraphViewer {
     // Determine node style based on type
     let nodeStyle;
     
-    // Get consistent color for this entity type
-    const entityColor = this.getColorForType(entity.type);
+    // Get color from settings or default
+    const entityColor = this.settings.nodeColors[entity.type] || this.getDefaultColorForType(entity.type);
     
     if (isGroup) {
       // Group node style
       nodeStyle = new GroupNodeStyle({
         contentAreaPadding: new Insets(10),
-        tabBackgroundFill: entityColor,
-        tabFill: entityColor,
+        tabBackgroundFill: new CssFill(entityColor),
+        tabFill: new CssFill(entityColor),
         stroke: '2px #667788',
         cornerRadius: 8
       });
@@ -330,7 +431,7 @@ export class GraphViewer {
       // Always use circle shape for regular nodes
       nodeStyle = new ShapeNodeStyle({
         shape: ShapeNodeShape.ELLIPSE, // Always use ellipse (circle) shape
-        fill: entityColor,
+        fill: new CssFill(entityColor),
         stroke: '2px #667788'
       });
     }
@@ -382,7 +483,6 @@ export class GraphViewer {
       // Create edge style
       const edgeStyle = new PolylineEdgeStyle({
         stroke: '1.5px #667788',
-        // Updated for yFiles 3.0
         targetArrow: new Arrow({
           type: ArrowType.TRIANGLE,
           cropAtPort: false
@@ -397,9 +497,19 @@ export class GraphViewer {
         tag: relationship
       });
       
-      // Add label if type is meaningful
+      // Add label if type is meaningful and edge labels are enabled
       if (relationship.type && relationship.type !== 'default') {
-        this.graph.addLabel(edge, relationship.type);
+        const labelStyle = this.settings.highlightEdgeLabels
+          ? new LabelStyle({
+              backgroundFill: 'rgba(255, 255, 255, 0.8)',
+              backgroundStroke: 'rgba(0, 0, 0, 0.1)'
+            })
+          : new LabelStyle();
+        
+        // Add label with style and visibility
+        const edgeLabel = this.graph.addLabel(edge, relationship.type);
+        // this.graph.setLabelVisibility(edgeLabel, this.settings.showEdgeLabels);
+        this.graph.setStyle(edgeLabel, labelStyle);
       }
       
       // Store in map for later reference
@@ -413,7 +523,7 @@ export class GraphViewer {
   private onSelectionChanged(): void {
     if (!this.nodeSelectionCallback) return;
     
-    // Get selected nodes - in yFiles 3.0 we need to filter the selection collection for nodes
+    // Get selected nodes - in yFiles 3.0 we filter the selection collection for nodes
     const selectedNodes: INode[] = [];
     this.graphComponent.selection.forEach(item => {
       if (item instanceof INode) {
@@ -442,44 +552,43 @@ export class GraphViewer {
    * Highlight a specific node
    */
   private highlightNode(node: INode, type: 'path' | 'direct-impact' | 'indirect-impact'): void {
-    // Define highlight appearance based on type
-    let highlightStyle;
+    // Create renderer for node highlighting
+    const renderer = new NodeStyleIndicatorRenderer();
+    
+    // Configure renderer based on highlight type
     const margins = new Insets(5);
+    
+    // Configure style based on highlight type
+    let highlightStyle: ShapeNodeStyle;
     
     switch (type) {
       case 'path':
-        highlightStyle = new NodeStyleIndicatorRenderer({
-          margins,
-          // Updated for yFiles 3.0
-          nodeStyle: new ShapeNodeStyle({
-            stroke: '3px gold',
-            fill: 'transparent'
-          })
+        highlightStyle = new ShapeNodeStyle({
+          stroke: '3px gold',
+          fill: 'transparent'
         });
+        renderer.margins = margins;
+        renderer.nodeStyle = highlightStyle;
         break;
       case 'direct-impact':
-        highlightStyle = new NodeStyleIndicatorRenderer({
-          margins,
-          // Updated for yFiles 3.0
-          nodeStyle: new ShapeNodeStyle({
-            stroke: '3px crimson',
-            fill: 'transparent'
-          })
+        highlightStyle = new ShapeNodeStyle({
+          stroke: '3px crimson',
+          fill: 'transparent'
         });
+        renderer.margins = margins;
+        renderer.nodeStyle = highlightStyle;
         break;
       case 'indirect-impact':
-        highlightStyle = new NodeStyleIndicatorRenderer({
-          margins: new Insets(3),
-          // Updated for yFiles 3.0
-          nodeStyle: new ShapeNodeStyle({
-            stroke: '2px orange',
-            fill: 'transparent'
-          })
+        highlightStyle = new ShapeNodeStyle({
+          stroke: '2px orange',
+          fill: 'transparent'
         });
+        renderer.margins = new Insets(3);
+        renderer.nodeStyle = highlightStyle;
         break;
     }
     
-    // Add to highlights
+    // Add to highlights without passing the renderer as a separate argument
     this.graphComponent.highlights.add(node);
   }
   
@@ -487,15 +596,18 @@ export class GraphViewer {
    * Highlight a specific edge
    */
   private highlightEdge(edge: IEdge, type: 'path' | 'impact'): void {
-    // Define highlight appearance based on type
-    const highlightStyle = new EdgeStyleIndicatorRenderer({
-      // Updated for yFiles 3.0
-      edgeStyle: new PolylineEdgeStyle({
-        stroke: type === 'path' ? '3px gold' : '3px crimson'
-      })
+    // Create renderer for edge highlighting
+    const renderer = new EdgeStyleIndicatorRenderer();
+    
+    // Configure style based on highlight type
+    const highlightStyle = new PolylineEdgeStyle({
+      stroke: type === 'path' ? '3px gold' : '3px crimson'
     });
     
-    // Add edge to highlights
+    // Set the style on the renderer
+    renderer.edgeStyle = highlightStyle;
+    
+    // Add edge to highlights without passing the renderer as a separate argument
     this.graphComponent.highlights.add(edge);
   }
   
@@ -508,58 +620,61 @@ export class GraphViewer {
     const targetBounds = nodeBounds.getEnlarged(50);
     
     // Animate to the target bounds
-    // Updated for yFiles 3.0 - changed signature
     const viewportAnimation = new ViewportAnimation(this.graphComponent, targetBounds, '0.5s');
     viewportAnimation.animate(0);
   }
   
   /**
-   * Get a shape for a node type - always returns circle for consistency
+   * Get a default color for a node type
+   * This is only used when no user-specified color is available
    */
-  private getShapeForType(type: string): ShapeNodeShape {
-    // Always return ELLIPSE shape for all node types as requested
-    return ShapeNodeShape.ELLIPSE;
-  }
-  
-  /**
-   * Get a color for a node type - using more vibrant, distinct colors
-   */
-  private getColorForType(type: string): string {
-    // Map entity types to more vibrant colors with better contrast
-    const typeToColor: Record<string, string> = {
-      'schema': '#4682B4',   // Steel Blue
-      'table': '#2ECC71',    // Emerald Green
-      'column': '#E74C3C',   // Bright Red
-      'view': '#F39C12',     // Orange
-      'procedure': '#3498DB', // Bright Blue
-      'user': '#9B59B6',     // Amethyst Purple
-      'group': '#ECF0F1'     // Light Gray
-    };
+  private getDefaultColorForType(type: string): string {
+    // We use a deterministic approach to assign colors based on the type string
+    // This ensures the same types always get the same color, but allows full customization
     
-    return typeToColor[type] || '#95A5A6'; // Default to a medium gray if type not found
-  }
-  
-  /**
-   * Add a method to export the graph as an image
-   */
-  async exportAsSVG(): Promise<string> {
-    // Create SVG export options
-    const exportOptions = {
-      margin: new Insets(5),
-      scale: 1,
-      exportImageElements: true
-    };
-    
-    try {
-      // Create an SVG exporter and generate SVG string
-      // Note: Implementation details may vary based on yFiles 3.0 API
-      // This is a placeholder for the actual implementation
-      return '<svg>Placeholder SVG</svg>';
-    } catch (error) {
-      console.error('Error exporting SVG:', error);
-      throw error;
+    // Simple hash function to generate a consistent color
+    let hash = 0;
+    for (let i = 0; i < type.length; i++) {
+      hash = type.charCodeAt(i) + ((hash << 5) - hash);
     }
+    
+    // Convert to a hex color
+    let color = '#';
+    for (let i = 0; i < 3; i++) {
+      const value = (hash >> (i * 8)) & 0xFF;
+      // Make sure color is not too dark or too light
+      const adjustedValue = Math.max(Math.min(value, 220), 50);
+      color += ('00' + adjustedValue.toString(16)).substr(-2);
+    }
+    
+    return color;
   }
+  
+  /**
+   * Export the graph as an SVG image
+   */
+  // async exportAsSVG(): Promise<string> {
+  //   // Create an SVG export instance
+  //   const exporter = new SvgExport({
+  //     worldBounds: this.graphComponent.contentRect,
+  //     scale: 1
+  //   });
+    
+  //   try {
+  //     // Export entire graph or the visible part
+  //     const exportRect = this.graphComponent.contentRect;
+      
+  //     // Perform the export operation
+  //     const svgElement = await exporter.exportSvgAsync(this.graphComponent, exportRect);
+      
+  //     // Convert the SVG element to a string
+  //     const serializer = new XMLSerializer();
+  //     return serializer.serializeToString(svgElement);
+  //   } catch (error) {
+  //     console.error('Error exporting SVG:', error);
+  //     throw error;
+  //   }
+  // }
   
   /**
    * Method to fit the graph into the available view
@@ -638,7 +753,16 @@ export class GraphViewer {
     
     // Add label if type is meaningful
     if (relationship.type && relationship.type !== 'default') {
-      this.graph.addLabel(edge, relationship.type);
+      const labelStyle = this.settings.highlightEdgeLabels
+        ? new LabelStyle({
+            backgroundFill: 'rgba(255, 255, 255, 0.8)',
+            backgroundStroke: 'rgba(0, 0, 0, 0.1)'
+          })
+        : new LabelStyle();
+      
+      const edgeLabel = this.graph.addLabel(edge, relationship.type);
+      // this.graph.setLabelVisibility(edgeLabel, this.settings.showEdgeLabels);
+      this.graph.setStyle(edgeLabel, labelStyle);
     }
     
     // Store in map for later reference
@@ -665,7 +789,7 @@ export class GraphViewer {
     
     // Update label if it changed
     if (updates.label) {
-      // In yFiles 3.0, we need to get the first label differently
+      // In yFiles 3.0, we need to get the first label from the collection
       if (node.labels.size > 0) {
         const label = node.labels.first();
         if (label !== null) {
@@ -679,21 +803,21 @@ export class GraphViewer {
       const isGroup = entity.type === 'group';
       let newStyle;
       
-      // Get consistent color for this entity type
-      const entityColor = this.getColorForType(entity.type);
+      // Get color from settings or default
+      const entityColor = this.settings.nodeColors[entity.type] || this.getDefaultColorForType(entity.type);
       
       if (isGroup) {
         newStyle = new GroupNodeStyle({
           contentAreaPadding: new Insets(10),
-          tabBackgroundFill: entityColor,
-          tabFill: entityColor,
+          tabBackgroundFill: new CssFill(entityColor),
+          tabFill: new CssFill(entityColor),
           stroke: '2px #667788',
           cornerRadius: 8
         });
       } else {
         newStyle = new ShapeNodeStyle({
           shape: ShapeNodeShape.ELLIPSE, // Always use circle shape
-          fill: entityColor,
+          fill: new CssFill(entityColor),
           stroke: '2px #667788'
         });
       }
@@ -740,5 +864,13 @@ export class GraphViewer {
     this.edgeMap.delete(relationshipId);
     
     return true;
+  }
+
+  /**
+   * Update viewport after layout changes
+   */
+  updateViewport(): void {
+    // In yFiles 3.0, we simply use fitGraphBounds directly
+    this.graphComponent.fitGraphBounds();
   }
 }

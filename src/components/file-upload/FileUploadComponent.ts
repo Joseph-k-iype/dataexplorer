@@ -8,15 +8,24 @@ import { formatFileSize } from '../../utils/helpers';
 
 export class FileUploadComponent {
   private container: HTMLElement;
+  private componentElement: HTMLElement;
   private fileParserService: FileParserService;
   private onDataLoadedCallback: ((data: RawData) => void) | null = null;
   
   constructor(container: HTMLElement) {
     this.container = container;
+    this.componentElement = document.createElement('div');
     this.fileParserService = new FileParserService();
     
     // Initialize the UI
     this.render();
+  }
+  
+  /**
+   * Get the component element
+   */
+  getElement(): HTMLElement {
+    return this.componentElement;
   }
   
   /**
@@ -30,8 +39,8 @@ export class FileUploadComponent {
    * Render the file upload component
    */
   private render(): void {
-    // Clear container
-    this.container.innerHTML = '';
+    // Clear component element
+    this.componentElement.innerHTML = '';
     
     // Create glassmorphism UI
     const uploadContainer = document.createElement('div');
@@ -115,14 +124,14 @@ export class FileUploadComponent {
     statusArea.className = 'file-status-area';
     uploadContainer.appendChild(statusArea);
     
-    this.container.appendChild(uploadContainer);
+    this.componentElement.appendChild(uploadContainer);
   }
   
   /**
    * Handle file upload
    */
   private async handleFileUpload(file: File): Promise<void> {
-    const statusArea = this.container.querySelector('.file-status-area');
+    const statusArea = this.componentElement.querySelector('.file-status-area');
     if (!statusArea) return;
     
     // Update status
@@ -239,7 +248,7 @@ export class FileUploadComponent {
     container.appendChild(table);
     
     // Add to status area
-    const statusArea = this.container.querySelector('.file-status-area');
+    const statusArea = this.componentElement.querySelector('.file-status-area');
     if (statusArea) {
       statusArea.appendChild(container);
     }
